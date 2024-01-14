@@ -1,0 +1,134 @@
+---
+title: "Perch Time Series Import"
+author: "Jake Slaton"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+
+
+library(tidyverse)
+library(jsonlite)
+library(dbplyr)
+library(RSQLite)
+
+
+```
+
+Script to parse through historical Perch Time series data for two athletes and then write the data into a local SQL database.
+
+```{r delacruz-data}
+## All folders containing Delacruz's data
+folders <- list.dirs(path = "Perch_Time_Series/Delacruz/", full.names = TRUE, recursive = FALSE)
+
+## Loop through each folder and import the JSON file and the CSV files
+ldf <- list()
+
+for(i in folders) {
+        
+        files <- list.files(i, full.names = TRUE)
+        ## Pull meta data
+        meta_data <- fromJSON(files[grep("metadata", files)])
+        ## Only want concentric data
+        concentric_files <- files[grep("concentric", files)]
+        
+        weight <- meta_data$weight/2.2046
+        
+        exercise <- meta_data$exercise_name
+        
+        num_reps <- meta_data$num_reps
+        
+        date <- gsub("\\T.*", "", meta_data$timestamp)
+        ## Import each CSV of time series data within each folder
+        for(j in concentric_files) {
+                
+                data <- read.csv(j)
+                
+                data <- data %>% 
+                        mutate(weight = weight,
+                               date = date,
+                               exercise = exercise,
+                               num_reps = num_reps,
+                               athlete = "Jourdan Delacruz")
+                ## Populate time column. Perch runs 30Hz.
+                data$t[1] <- 0
+                for(k in 2:nrow(data)) {
+                        
+                        data$t[k] <- lag(data$t)[k] + (1/30)
+                        
+                }
+                
+                ldf <- c(ldf, list(data))
+                
+        }
+        
+}
+
+## Import extracted time series data into SQL database
+db_con <- dbConnect(SQLite(), "PG_SportSci_Database.db")
+for(i in 1:length(ldf)) {
+        
+        dbWriteTable(db_con, "perch_time_series_data", ldf[[i]], append = TRUE)
+        
+}
+dbDisconnect(db_con)
+```
+
+```{r vibert-data}
+## All folders containing Vibert's data
+folders <- list.dirs(path = "Perch_Time_Series/Vibert/", full.names = TRUE, recursive = FALSE)
+
+## Loop through each folder and import the JSON file and the CSV files
+ldf <- list()
+
+for(i in folders) {
+        
+        files <- list.files(i, full.names = TRUE)
+        ## Pull meta data
+        meta_data <- fromJSON(files[grep("metadata", files)])
+        ## Only want concentric data
+        concentric_files <- files[grep("concentric", files)]
+        
+        weight <- meta_data$weight/2.2046
+        
+        exercise <- meta_data$exercise_name
+        
+        num_reps <- meta_data$num_reps
+        
+        date <- gsub("\\T.*", "", meta_data$timestamp)
+        ## Import each CSV of time series data within each folder
+        for(j in concentric_files) {
+                
+                data <- read.csv(j)
+                
+                data <- data %>% 
+                        mutate(weight = weight,
+                               date = date,
+                               exercise = exercise,
+                               num_reps = num_reps,
+                               athlete = "Kate Vibert")
+                ## Populate time column. Perch runs 30Hz.
+                data$t[1] <- 0
+                for(k in 2:nrow(data)) {
+                        
+                        data$t[k] <- lag(data$t)[k] + (1/30)
+                        
+                }
+                
+                ldf <- c(ldf, list(data))
+                
+        }
+        
+}
+
+## Import extracted time series data into SQL database
+db_con <- dbConnect(SQLite(), "PG_SportSci_Database.db")
+for(i in 1:length(ldf)) {
+        
+        dbWriteTable(db_con, "perch_time_series_data", ldf[[i]], append = TRUE)
+        
+}
+dbDisconnect(db_con)
+```
